@@ -1,0 +1,19 @@
+{
+  "name": "liquid-editorial-blog",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Liquid Editorial 空间化个人技术博客",
+  "scripts": {
+    "dev:web": "pnpm --filter @blog/web dev",
+    "dev:api": "cd apps/api && uv run fastapi dev app/main.py",
+    "build:packages": "pnpm --filter @blog/markdown build",
+    "build:web": "pnpm --filter @blog/web build",
+    "build": "pnpm run build:packages && pnpm run build:web",
+    "lint": "pnpm --filter @blog/web lint",
+    "test": "pnpm --filter @blog/markdown test && pnpm --filter @blog/web test"
+  },
+  "packageManager": "pnpm@12.14.0",
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

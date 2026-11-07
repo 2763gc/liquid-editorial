@@ -1,0 +1,182 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  font-size: 16px;
+  background-color: var(--color-bg);
+  caret-color: var(--color-accent);
+  accent-color: var(--color-accent);
+  /* 锚点跳转避开粘性顶栏 */
+  scroll-padding-top: calc(var(--header-h) + 24px);
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100svh;
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-x: clip;
+  font-feature-settings: "kern", "liga", "calt";
+  font-optical-sizing: auto;
+  /* 中文排版：避头尾、标点挤压、中西文间距（新特性均为渐进增强，不支持时无副作用） */
+  line-break: strict;
+  text-spacing-trim: trim-start;
+  text-autospace: normal;
+}
+code, pre, kbd, samp, input, textarea { text-autospace: no-autospace; text-spacing-trim: space-all; }
+
+/* Lenis 官方推荐样式（禁止与原生 smooth 冲突） */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: clip; }
+
+a {
+  color: inherit;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
+img { height: auto; }
+
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+::placeholder { color: var(--color-ink-faint); opacity: 1; }
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+}
+
+h1, h2, h3, h4 {
+  text-wrap: balance;
+}
+
+p, li, blockquote, dd, figcaption {
+  text-wrap: pretty;
+}
+
+::marker { color: var(--color-ink-muted); font-family: var(--font-mono); font-size: 0.85em; }
+
+::selection {
+  background-color: var(--color-selection);
+  color: var(--color-ink);
+}
+
+/*
+ * 焦点环：朱砂描边、偏移 2px（PRD 11.3）。
+ * 块级的可聚焦条目（.entry-row、卡片）另有「校样圈改」样式：四角套准标记，见 components.css .register-focus
+ */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+/* 转场后程序性地把焦点交给 h1（读屏器播报），不画焦点环 */
+[tabindex="-1"]:focus { outline: none; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-ink) 18%, transparent);
+  border: 3px solid var(--color-bg);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+html { scrollbar-color: color-mix(in oklab, var(--color-ink) 22%, transparent) transparent; scrollbar-width: thin; }
+
+/* 自定义光标启用时隐藏系统光标；输入区保留文本光标 */
+html.has-custom-cursor,
+html.has-custom-cursor * { cursor: none !important; }
+html.has-custom-cursor input,
+html.has-custom-cursor textarea,
+html.has-custom-cursor select,
+html.has-custom-cursor [contenteditable="true"],
+html.has-custom-cursor .cm-editor * { cursor: text !important; }
+
+/* 主题切换（View Transitions）：关闭默认交叉淡入，由脚本驱动晕染扩散；切换期间冻结颜色过渡 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after { transition: none !important; }
+
+/* 动效减弱 */
+html.reduce-motion,
+html.reduce-motion * {
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 8px 14px;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-size: var(--fs-micro);
+  transform: translateY(-200%);
+  transition: transform var(--dur-sm) var(--ease-out-expo);
+}
+.skip-link:focus-visible { transform: none; }
+
+/* 共享元素转场（M2）：页面整体快速交叉淡入，期号 / 标题 / 封面在新旧位置之间飞行 */
+html.vt-shared::view-transition-old(root) { animation: vt-fade-out 260ms var(--ease-in-quart) both; }
+html.vt-shared::view-transition-new(root) { animation: vt-fade-in 560ms var(--ease-out-expo) 140ms both; }
+::view-transition-group(shared-no),
+::view-transition-group(shared-title),
+::view-transition-group(shared-cover) {
+  animation-duration: 780ms;
+  animation-timing-function: var(--ease-out-expo);
+}
+::view-transition-old(shared-title),
+::view-transition-new(shared-title) { height: 100%; object-fit: none; object-position: left top; }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; transform: translate3d(0, 24px, 0); } }

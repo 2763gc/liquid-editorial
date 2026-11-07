@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pcache__/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build outputs
+.output/
+.nuxt/
+dist/
+.nitro/
+build/
+*.egg-info/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local data & SQLite
+data/
+backups/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.db.gz
+
+# Testing & quality
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+coverage/
+
+# Logs & temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 内部部署脚本（含私有环境信息，不随开源仓库分发）
+deploy/deploy.py
+deploy/deploy_sync.py
+deploy/deploy.bat
+.claude/
+*.md.orig

@@ -1,0 +1,269 @@
+/* ==========================================================================
+   设计 Token 2.0（PRD 第 2 节 · 任务书 §4.1）
+
+   - 色彩用 OKLCH 定义。<html data-theme data-period data-blend> 由首屏内联脚本写入（app/utils/boot.ts）
+   - 四时光照是连续的：同一张纸在不同光线下的样子。分界前后 45 分钟内，当前时段与相邻时段
+     按 --light-t（0–0.5）在 Oklab 空间混合（近中性色在 Oklab 里插值不会绕色相环）
+   - 关键颜色用 @property 注册：主题与光照变化时由颜色本身过渡，首屏 2 秒缓动到当前时段
+   - 动效 Token（缓动 / 时长 / 错峰 / 套准）由 composables/motion/tokens.ts 生成后内联，不在这里重复
+   ========================================================================== */
+
+@property --color-bg { syntax: "<color>"; inherits: true; initial-value: #F2EFE8; }
+@property --color-surface { syntax: "<color>"; inherits: true; initial-value: #E9E5DB; }
+@property --color-surface-2 { syntax: "<color>"; inherits: true; initial-value: #DFDACD; }
+@property --color-ink { syntax: "<color>"; inherits: true; initial-value: #141414; }
+@property --color-ink-muted { syntax: "<color>"; inherits: true; initial-value: #6B675F; }
+@property --color-ink-faint { syntax: "<color>"; inherits: true; initial-value: #7E796F; }
+@property --color-accent { syntax: "<color>"; inherits: true; initial-value: #FF4D2E; }
+@property --color-code-bg { syntax: "<color>"; inherits: true; initial-value: #ECE8DE; }
+
+:root {
+  color-scheme: light;
+
+  /* ---- 色板：四个时段（纸 × 光线）。只在本文件内引用，组件一律用下方语义 Token ---- */
+  --day-bg: oklch(95.3% 0.010 87.5);
+  --day-surface: oklch(92.2% 0.014 88.7);
+  --day-surface-2: oklch(88.9% 0.018 89.4);
+  --day-ink: oklch(19.4% 0.004 80);
+  --day-muted: oklch(50% 0.013 84.6);
+  --day-faint: oklch(53% 0.014 84.6);
+  --day-accent: oklch(67% 0.219 32.3);
+  --day-accent-text: oklch(54% 0.19 32);
+  --day-code: oklch(93.1% 0.014 88.7);
+
+  /* 晨：纸色偏冷，带极淡的蓝 */
+  --morning-bg: oklch(95.4% 0.005 229);
+  --morning-surface: oklch(92.6% 0.007 240);
+  --morning-surface-2: oklch(89.2% 0.009 242);
+  --morning-ink: oklch(20.6% 0.009 255.6);
+  --morning-muted: oklch(50.5% 0.017 251.3);
+  --morning-faint: oklch(53% 0.013 248);
+  --morning-accent: oklch(64.2% 0.208 32.9);
+  --morning-accent-text: oklch(53.5% 0.19 33);
+  --morning-code: oklch(93.3% 0.006 248);
+
+  /* 暮：纸色偏暖，强调色向琥珀金偏移 */
+  --dusk-bg: oklch(94.3% 0.018 78.2);
+  --dusk-surface: oklch(90.7% 0.024 79.7);
+  --dusk-surface-2: oklch(86.8% 0.029 79.5);
+  --dusk-ink: oklch(20.3% 0.010 67.2);
+  --dusk-muted: oklch(50% 0.026 71.5);
+  --dusk-faint: oklch(52% 0.028 76);
+  --dusk-accent: oklch(68.2% 0.186 44.8);
+  --dusk-accent-text: oklch(52% 0.15 45);
+  --dusk-code: oklch(91.6% 0.022 80.7);
+
+  /* 夜：墨色主题 */
+  --night-bg: oklch(15.5% 0.002 286);
+  --night-surface: oklch(20.1% 0.004 286);
+  --night-surface-2: oklch(24.1% 0.006 286);
+  --night-ink: oklch(93.2% 0.013 86.8);
+  --night-muted: oklch(66% 0.014 86.9);
+  --night-faint: oklch(60% 0.012 85);
+  --night-accent: oklch(68.5% 0.206 32.5);
+  --night-accent-text: oklch(71% 0.18 34);
+  --night-code: oklch(18.8% 0.004 286);
+
+  /* ---- 当前光照（pa）与相邻光照（pb），默认昼 ---- */
+  --pa-bg: var(--day-bg); --pa-surface: var(--day-surface); --pa-surface-2: var(--day-surface-2);
+  --pa-ink: var(--day-ink); --pa-muted: var(--day-muted); --pa-faint: var(--day-faint);
+  --pa-accent: var(--day-accent); --pa-accent-text: var(--day-accent-text); --pa-code: var(--day-code);
+  --pb-bg: var(--pa-bg); --pb-surface: var(--pa-surface); --pb-surface-2: var(--pa-surface-2);
+  --pb-ink: var(--pa-ink); --pb-muted: var(--pa-muted); --pb-faint: var(--pa-faint);
+  --pb-accent: var(--pa-accent); --pb-accent-text: var(--pa-accent-text); --pb-code: var(--pa-code);
+  --light-t: 0;
+
+  /* ---- 语义色（不支持 color-mix 时取当前时段的纯色） ---- */
+  --color-bg: var(--pa-bg);
+  --color-surface: var(--pa-surface);
+  --color-surface-2: var(--pa-surface-2);
+  --color-ink: var(--pa-ink);
+  --color-ink-muted: var(--pa-muted);
+  --color-ink-faint: var(--pa-faint);
+  --color-accent: var(--pa-accent);
+  /* 小字号的朱砂文字（编号、眉题）：对纸色 ≥ 4.5:1 */
+  --color-accent-text: var(--pa-accent-text);
+  --color-accent-ink: var(--day-ink);
+  /* 朱砂印：在根上取值后被继承，文章页改写 --color-accent（设色）也不会影响印章 */
+  --color-seal: var(--color-accent);
+  --color-code-bg: var(--pa-code);
+  --color-line: color-mix(in oklab, var(--color-ink) 12%, transparent);
+  --color-line-strong: color-mix(in oklab, var(--color-ink) 28%, transparent);
+  --color-selection: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  /* 半透明纸面（顶栏、浮层） */
+  --color-paper-glass: color-mix(in oklab, var(--color-bg) 82%, transparent);
+  /* 状态色：只用于状态徽记、提示框，不做大面积色块 */
+  --color-ok: oklch(62% 0.13 165);
+  --color-info: oklch(60% 0.15 255);
+  --color-warn: oklch(70% 0.15 80);
+  --color-danger: oklch(60% 0.2 25);
+  /* 终端块：任何时段都是深色 */
+  --term-bg: oklch(16.5% 0.004 286);
+  --term-ink: oklch(91% 0.012 87);
+  --term-line: color-mix(in oklab, var(--term-ink) 9%, transparent);
+
+  /* ---- 质感与光照 ---- */
+  --paper-fiber-opacity: 0.05;
+  --grain-opacity: var(--paper-fiber-opacity);
+  --ink-spread: 0.6;
+  --light-angle: 180deg;
+  --light-warmth: 0;
+  --light-window-opacity: 0.06;
+  --img-filter: saturate(0.92);
+
+  /* ---- 阴影：只给浮层。多层叠加模拟纸张落在桌面上；夜间用 --shadow-k 整体加深 ---- */
+  --shadow-rgb: 38 30 20;
+  --shadow-k: 1;
+  --edge-light: inset 0 1px 0 rgb(255 255 255 / 0.55);
+  --shadow-xs: 0 1px 1px rgb(var(--shadow-rgb) / calc(0.05 * var(--shadow-k)));
+  --shadow-sm:
+    0 1px 1px rgb(var(--shadow-rgb) / calc(0.04 * var(--shadow-k))),
+    0 2px 4px -2px rgb(var(--shadow-rgb) / calc(0.06 * var(--shadow-k))),
+    0 10px 20px -14px rgb(var(--shadow-rgb) / calc(0.16 * var(--shadow-k)));
+  --shadow-md:
+    0 1px 1px rgb(var(--shadow-rgb) / calc(0.04 * var(--shadow-k))),
+    0 4px 8px -4px rgb(var(--shadow-rgb) / calc(0.07 * var(--shadow-k))),
+    0 22px 40px -22px rgb(var(--shadow-rgb) / calc(0.26 * var(--shadow-k)));
+  --shadow-lg:
+    0 1px 2px rgb(var(--shadow-rgb) / calc(0.04 * var(--shadow-k))),
+    0 8px 16px -8px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-k))),
+    0 36px 72px -32px rgb(var(--shadow-rgb) / calc(0.34 * var(--shadow-k)));
+  --shadow-float:
+    0 0 0 1px rgb(var(--shadow-rgb) / calc(0.05 * var(--shadow-k))),
+    0 2px 6px -2px rgb(var(--shadow-rgb) / calc(0.08 * var(--shadow-k))),
+    0 16px 32px -12px rgb(var(--shadow-rgb) / calc(0.14 * var(--shadow-k))),
+    0 48px 96px -36px rgb(var(--shadow-rgb) / calc(0.3 * var(--shadow-k)));
+
+  /* ---- 圆角：编辑部风格以直角为主，交互控件最多 2px；胶囊只用于标签与浮动控件 ---- */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  /* ---- 字体（自托管，见 fonts.css；回退字体已对齐度量） ---- */
+  --font-display: "Fraunces Variable", "Fraunces Fallback", "Noto Serif SC Variable", "Serif SC Fallback", "Songti SC", "STSong", serif;
+  --font-serif: "Noto Serif SC Variable", "Serif SC Fallback", "Songti SC", "STSong", "Source Han Serif SC", Georgia, serif;
+  --font-sans: "Inter Variable", "Inter Fallback", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC Variable", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono Fallback", ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+
+  /* ---- 流式字号 ---- */
+  --fs-display: clamp(3.5rem, 10vw, 11rem);
+  --fs-h1: clamp(2.5rem, 5.6vw, 5.5rem);
+  --fs-h2: clamp(1.625rem, 2.6vw, 2.5rem);
+  --fs-h3: clamp(1.25rem, 1.6vw, 1.5rem);
+  --fs-body: clamp(1.0625rem, 0.95rem + 0.35vw, 1.1875rem);
+  --fs-small: 0.875rem;
+  --fs-micro: 0.75rem;
+  --fs-nano: 0.6875rem;
+
+  /* ---- 间距刻度 ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+  --space-32: 128px;
+  --space-48: 192px;
+
+  /* ---- 网格 ---- */
+  --page-padding: clamp(16px, 4vw, 64px);
+  --gutter: clamp(16px, 2vw, 32px);
+  --content-max-width: 680px;
+  --wide-max-width: 1080px;
+  --full-max-width: 1440px;
+  --header-h: 64px;
+
+  /* ---- 层级 ---- */
+  --z-header: 50;
+  --z-overlay: 900;
+  --z-menu: 950;
+  --z-palette: 960;
+  --z-curtain: 1000;
+  --z-grain: 1100;
+  --z-cursor: 1200;
+
+  /* 光照变化（主题切换不经 View Transitions 时、定时校准时）由颜色本身过渡 */
+  transition:
+    --color-bg 600ms var(--ease-out-quart), --color-surface 600ms var(--ease-out-quart),
+    --color-surface-2 600ms var(--ease-out-quart), --color-ink 600ms var(--ease-out-quart),
+    --color-ink-muted 600ms var(--ease-out-quart), --color-ink-faint 600ms var(--ease-out-quart),
+    --color-accent 600ms var(--ease-out-quart), --color-code-bg 600ms var(--ease-out-quart);
+}
+
+/* 首屏：颜色用 2 秒缓动到当前时段（boot.ts 只在高中档、非减弱动效、亮色时启用） */
+html.light-easing {
+  transition-duration: var(--dur-light);
+  transition-timing-function: var(--ease-in-out-quart);
+}
+html.reduce-motion { transition: none; }
+
+/* ---- 时段选择：亮色主题下按 data-period 取当前色板，按 data-blend 取相邻色板 ---- */
+html[data-theme="light"][data-period="morning"] {
+  --pa-bg: var(--morning-bg); --pa-surface: var(--morning-surface); --pa-surface-2: var(--morning-surface-2);
+  --pa-ink: var(--morning-ink); --pa-muted: var(--morning-muted); --pa-faint: var(--morning-faint);
+  --pa-accent: var(--morning-accent); --pa-accent-text: var(--morning-accent-text); --pa-code: var(--morning-code);
+  --paper-fiber-opacity: 0.045;
+  --light-window-opacity: 0.07;
+}
+html[data-theme="light"][data-period="dusk"] {
+  --pa-bg: var(--dusk-bg); --pa-surface: var(--dusk-surface); --pa-surface-2: var(--dusk-surface-2);
+  --pa-ink: var(--dusk-ink); --pa-muted: var(--dusk-muted); --pa-faint: var(--dusk-faint);
+  --pa-accent: var(--dusk-accent); --pa-accent-text: var(--dusk-accent-text); --pa-code: var(--dusk-code);
+  --paper-fiber-opacity: 0.055;
+  --light-window-opacity: 0.08;
+}
+html[data-theme="light"][data-blend="morning"] {
+  --pb-bg: var(--morning-bg); --pb-surface: var(--morning-surface); --pb-surface-2: var(--morning-surface-2);
+  --pb-ink: var(--morning-ink); --pb-muted: var(--morning-muted); --pb-faint: var(--morning-faint);
+  --pb-accent: var(--morning-accent); --pb-accent-text: var(--morning-accent-text); --pb-code: var(--morning-code);
+}
+html[data-theme="light"][data-blend="day"] {
+  --pb-bg: var(--day-bg); --pb-surface: var(--day-surface); --pb-surface-2: var(--day-surface-2);
+  --pb-ink: var(--day-ink); --pb-muted: var(--day-muted); --pb-faint: var(--day-faint);
+  --pb-accent: var(--day-accent); --pb-accent-text: var(--day-accent-text); --pb-code: var(--day-code);
+}
+html[data-theme="light"][data-blend="dusk"] {
+  --pb-bg: var(--dusk-bg); --pb-surface: var(--dusk-surface); --pb-surface-2: var(--dusk-surface-2);
+  --pb-ink: var(--dusk-ink); --pb-muted: var(--dusk-muted); --pb-faint: var(--dusk-faint);
+  --pb-accent: var(--dusk-accent); --pb-accent-text: var(--dusk-accent-text); --pb-code: var(--dusk-code);
+}
+
+@supports (color: color-mix(in oklab, red, blue)) {
+  :root {
+    --color-bg: color-mix(in oklab, var(--pa-bg), var(--pb-bg) calc(var(--light-t) * 100%));
+    --color-surface: color-mix(in oklab, var(--pa-surface), var(--pb-surface) calc(var(--light-t) * 100%));
+    --color-surface-2: color-mix(in oklab, var(--pa-surface-2), var(--pb-surface-2) calc(var(--light-t) * 100%));
+    --color-ink: color-mix(in oklab, var(--pa-ink), var(--pb-ink) calc(var(--light-t) * 100%));
+    --color-ink-muted: color-mix(in oklab, var(--pa-muted), var(--pb-muted) calc(var(--light-t) * 100%));
+    --color-ink-faint: color-mix(in oklab, var(--pa-faint), var(--pb-faint) calc(var(--light-t) * 100%));
+    --color-accent: color-mix(in oklab, var(--pa-accent), var(--pb-accent) calc(var(--light-t) * 100%));
+    --color-accent-text: color-mix(in oklab, var(--pa-accent-text), var(--pb-accent-text) calc(var(--light-t) * 100%));
+    --color-code-bg: color-mix(in oklab, var(--pa-code), var(--pb-code) calc(var(--light-t) * 100%));
+  }
+}
+
+/* ---- 夜：墨色主题（不参与时段混合） ---- */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --pa-bg: var(--night-bg); --pa-surface: var(--night-surface); --pa-surface-2: var(--night-surface-2);
+  --pa-ink: var(--night-ink); --pa-muted: var(--night-muted); --pa-faint: var(--night-faint);
+  --pa-accent: var(--night-accent); --pa-accent-text: var(--night-accent-text); --pa-code: var(--night-code);
+  --pb-bg: var(--pa-bg); --pb-surface: var(--pa-surface); --pb-surface-2: var(--pa-surface-2);
+  --pb-ink: var(--pa-ink); --pb-muted: var(--pa-muted); --pb-faint: var(--pa-faint);
+  --pb-accent: var(--pa-accent); --pb-accent-text: var(--pa-accent-text); --pb-code: var(--pa-code);
+  --color-accent-ink: var(--night-bg);
+  --color-line: color-mix(in oklab, var(--color-ink) 11%, transparent);
+  --color-line-strong: color-mix(in oklab, var(--color-ink) 26%, transparent);
+  --color-selection: color-mix(in oklab, var(--color-accent) 30%, transparent);
+  --paper-fiber-opacity: 0.065;
+  --light-window-opacity: 0;
+  --img-filter: saturate(0.9) brightness(0.9);
+  --shadow-rgb: 0 0 0;
+  --shadow-k: 2.6;
+  --edge-light: inset 0 1px 0 rgb(255 255 255 / 0.045);
+}

@@ -1,0 +1,155 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        // 部署目标从 Jenkins 凭据/参数注入，仓库内不落任何服务器信息
+        BLOG_SERVER = "${params.DEPLOY_HOST}"
+        BLOG_USER = 'root'
+        REMOTE_PATH = '/opt/blog'
+    }
+
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'master', description: '要部署的 Git 分支（如 master / test / feature-xxx）')
+        string(name: 'DEPLOY_HOST', defaultValue: '', description: '部署服务器 IP（或在 Jenkins 全局配置中预设）')
+        booleanParam(name: 'SKIP_BUILD', defaultValue: false, description: '跳过 Docker 构建（仅同步文件并重启）')
+    }
+
+    stages {
+        stage('拉取代码') {
+            steps {
+                script {
+                    if (params.BRANCH?.trim()) {
+                        env.DEPLOY_BRANCH = params.BRANCH.trim()
+                    } else {
+                        env.DEPLOY_BRANCH = 'master'
+                    }
+                }
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${env.DEPLOY_BRANCH}"]],
+                    userRemoteConfigs: scm.userRemoteConfigs,
+                    extensions: scm.extensions
+                ])
+                echo "已拉取分支: ${env.DEPLOY_BRANCH}, commit: ${env.GIT_COMMIT}"
+            }
+        }
+
+        stage('打包文件') {
+            steps {
+                sh '''
+                    # data/ 不在 Git 仓库中，用 touch 创建空目录占位
+                    mkdir -p data
+                    tar czf /tmp/blog-deploy.tar.gz \
+                      --exclude=node_modules \
+                      --exclude=.nuxt \
+                      --exclude=.output \
+                      --exclude=.venv \
+                      --exclude=.mypy_cache \
+                      --exclude=.pytest_cache \
+                      --exclude=.ruff_cache \
+                      --exclude=.git \
+                      --exclude=.claude \
+                      --exclude=backups \
+                      --exclude="*.log" \
+                      apps/ packages/ deploy/ data/ \
+                      package.json pnpm-workspace.yaml pnpm-lock.yaml docker-compose.yml
+                    echo "打包完成: $(du -sh /tmp/blog-deploy.tar.gz)"
+                '''
+            }
+        }
+
+        stage('上传到服务器') {
+            steps {
+                sshagent(credentials: ['blog-server-ssh']) {
+                    sh '''
+                        scp -o StrictHostKeyChecking=no /tmp/blog-deploy.tar.gz ${BLOG_USER}@${BLOG_SERVER}:${REMOTE_PATH}/
+                        ssh -o StrictHostKeyChecking=no ${BLOG_USER}@${BLOG_SERVER} "cd ${REMOTE_PATH} && tar xzf blog-deploy.tar.gz && rm blog-deploy.tar.gz"
+                        echo "文件已同步到 ${BLOG_SERVER}"
+                    '''
+                }
+            }
+        }
+
+        stage('备份数据库') {
+            steps {
+                sshagent(credentials: ['blog-server-ssh']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no ${BLOG_USER}@${BLOG_SERVER} \
+                          "cp ${REMOTE_PATH}/data/blog.db ${REMOTE_PATH}/data/blog.db.bak.$(date +%Y%m%d_%H%M%S) 2>/dev/null && echo '备份完成' || echo '跳过备份'"
+                    '''
+                }
+            }
+        }
+
+        stage('构建 Docker 镜像') {
+            when { expression { !params.SKIP_BUILD } }
+            steps {
+                sshagent(credentials: ['blog-server-ssh']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=6 \
+                          ${BLOG_USER}@${BLOG_SERVER} "cd ${REMOTE_PATH} && docker compose build --progress=plain" 2>&1 | grep -E "CACHED|DONE|ERROR|writing image|naming" | tail -25
+                    '''
+                }
+            }
+        }
+
+        stage('部署启动') {
+            steps {
+                sshagent(credentials: ['blog-server-ssh']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+                          ${BLOG_USER}@${BLOG_SERVER} "cd ${REMOTE_PATH} && docker compose up -d" 2>&1 | tail -8
+                        # 重启 nginx 刷新 upstream DNS 缓存（容器重建后 IP 会变）
+                        ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+                          ${BLOG_USER}@${BLOG_SERVER} "cd ${REMOTE_PATH} && docker compose restart nginx" 2>&1
+                    '''
+                }
+            }
+        }
+
+        stage('健康检查') {
+            steps {
+                sshagent(credentials: ['blog-server-ssh']) {
+                    sh '''
+                        set +e
+                        # 等待容器启动，最多重试 60 秒
+                        for i in $(seq 1 15); do
+                            API_STATUS=$(ssh -o StrictHostKeyChecking=no ${BLOG_USER}@${BLOG_SERVER} "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/api/v1/health")
+                            WEB_STATUS=$(ssh -o StrictHostKeyChecking=no ${BLOG_USER}@${BLOG_SERVER} "curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/api/health")
+                            echo "第 ${i} 次检测: API=$API_STATUS Web=$WEB_STATUS"
+                            if [ "$API_STATUS" = "200" ] && [ "$WEB_STATUS" = "200" ]; then
+                                echo "✅ 部署成功！"
+                                exit 0
+                            fi
+                            sleep 4
+                        done
+                        echo "⚠️ 健康检查超时"
+                        exit 1
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo """
+            ====================================
+            ✅ 部署成功！
+            🌐 https://your-domain.example.com
+            🔧 https://your-domain.example.com/admin
+            📦 分支: ${env.DEPLOY_BRANCH}
+            ====================================
+            """
+        }
+        failure {
+            echo '❌ 部署失败，请检查上方日志'
+        }
+    }
+}

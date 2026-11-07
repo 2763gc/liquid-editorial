@@ -1,0 +1,36 @@
+# 版本控制和 IDE
+.git
+.gitignore
+.claude
+.idea
+.vscode
+
+# 构建产物（容器内会重新构建）
+**/node_modules
+**/.nuxt
+**/.output
+**/dist
+**/.venv
+
+# 缓存
+**/.mypy_cache
+**/.pytest_cache
+**/.ruff_cache
+**/coverage
+
+# 运行时数据和备份（由服务器持久化目录挂载，不进镜像）
+data/
+backups/
+*.log
+*.db
+*.db-*
+*.tar.gz
+
+# 部署脚本本身不需要进镜像
+deploy/
+docker-compose.yml
+Jenkinsfile
+
+# 文档
+*.md
+LICENSE

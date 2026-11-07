@@ -1,0 +1,12 @@
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS runner
+
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1
+
+COPY apps/api/pyproject.toml ./
+RUN uv pip install --system -e .
+
+COPY apps/api/ ./
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
